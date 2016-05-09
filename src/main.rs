@@ -6,28 +6,62 @@ use std::io::BufReader;
 use std::env;
 
 struct StreamReader<'a> {
-    curr: u32,
-    reader: &'a mut Read,
+    chars: Vec<char>,
+    previous: Option<char>,
+    current: Option<char>,
+    next: Option<char>,
+    reader: &'a mut BufRead,
 }
 
 impl<'a> StreamReader<'a> {
-    pub fn new(input: &mut Read) -> StreamReader {
+    pub fn new(input: &mut BufRead) -> StreamReader {
         StreamReader {
-            curr: 123,
+            chars: vec!(),
+            previous: None,
+            current: None,
+            next: None,
             reader: input,
         }
     }
 }
-/*
-impl Iterator for StreamReader {
+
+impl<'a> Iterator for StreamReader<'a> {
     type Item = char;
 
     fn next(&mut self) -> Option<char> {
-        let mut buffer = String::new();
-        self.reader.read_line(buffer);
+        if self.chars.len() == 0 {
+            // Buffer next line
+            self.chars.clear();
+
+            let mut line = String::new();
+            if self.reader.read_line(&mut line).unwrap() == 0 {
+                return None::<char>;
+            }
+
+            println!("line: {}", line);
+
+            for c in line.chars() {
+                self.chars.push(c);
+            }
+        }
+
+        // The first time this function is called, the next block needs to run
+        // twice (otherwise it would return with only self.next set).
+        let times = match self.current.is_none() {
+            false => 1,
+            true  => 2,
+        };
+
+        for _ in 0..times {
+            self.previous = self.current;
+            self.current = self.next;
+            self.next = Some(self.chars.remove(0));
+        }
+
+        self.current
     }
 }
-*/
+
 fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
     const IGNORED_TAGS: &'static [ &'static str ] = &[ "script", "style" ];
 
@@ -35,8 +69,10 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
         println!("{}", it);
     }
 
-    let mut reader = BufReader::new(input);
+    //let mut reader = BufReader::new(input);
     //let mut writer = BufWriter::new(output);
+    let mut bufreader = BufReader::new(input);
+    let mut reader = StreamReader::new(&mut bufreader);
     let mut buffer = String::new();
 
     let mut in_quotes = false;
@@ -47,56 +83,53 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
     let mut in_ignored_tag = false;
     let mut ignored_tag = "";
 
-    for line in reader.lines() {
-        for char in line.unwrap().chars() {
-            println!("{}", char);
+    for char in reader {
+        println!("{}", char);
+/*
+        if char == '"' {
+            in_quotes = !in_quotes;
+            println!("in_quotes: {}", in_quotes);
+        }
 
-            if char == '"' {
-                in_quotes = !in_quotes;
-                println!("in_quotes: {}", in_quotes);
+        if !in_quotes {
+            // Tag start
+            if char == '<' {
+                in_tag = true;
             }
 
-            if !in_quotes {
-                // Tag start
-                if char == '<' {
-                    in_tag = true;
-                }
+            // Tag stop
+            if char == '>' {
+                in_tag = false;
 
-                // Tag stop
-                if char == '>' {
-                    in_tag = false;
-
-                    if !tag.starts_with("/") {
-                        // Starting tag
-                        for ignored in IGNORED_TAGS {
-                            if tag.starts_with(ignored) {
-                                in_ignored_tag = true;
-                                ignored_tag = ignored;
-                                println!("IGNORING {}", ignored_tag);
-                            }
-                        }
-                    } else {
-                        // Closing tag
-                        let tag_offset = &tag.clone()[1..];
-
-                        if tag_offset.starts_with(ignored_tag) {
-                            in_ignored_tag = false;
-                            println!("NOT IGNORING");
+                if !tag.starts_with("/") {
+                    // Starting tag
+                    for ignored in IGNORED_TAGS {
+                        if tag.starts_with(ignored) {
+                            in_ignored_tag = true;
+                            ignored_tag = ignored;
+                            println!("IGNORING {}", ignored_tag);
                         }
                     }
+                } else {
+                    // Closing tag
+                    let tag_offset = &tag.clone()[1..];
 
-                    tag.clear();
+                    if tag_offset.starts_with(ignored_tag) {
+                        in_ignored_tag = false;
+                        println!("NOT IGNORING");
+                    }
                 }
-            }
 
-            if in_tag && char != '<' {
-                tag.push(char);
-                println!("tag: {}", tag);
+                tag.clear();
             }
-
-            buffer.push(char);
         }
-        buffer.push('\n');
+
+        if in_tag && char != '<' {
+            tag.push(char);
+            println!("tag: {}", tag);
+        }
+
+        buffer.push(char);*/
     }
     println!("{}", buffer);
 /*
