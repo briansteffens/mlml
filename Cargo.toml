@@ -1,0 +1,4 @@
+[package]
+name = "mlml"
+version = "0.0.1"
+authors = ["Brian Steffens <briansteffens@gmail.com>"]
