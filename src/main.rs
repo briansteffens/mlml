@@ -5,11 +5,16 @@ use std::io::BufReader;
 //use std::io::BufWriter;
 use std::env;
 
-struct StreamReader<'a> {
-    chars: Vec<char>,
+struct StreamFrame {
     previous: Option<char>,
     current: Option<char>,
     next: Option<char>,
+}
+
+struct StreamReader<'a> {
+    chars: Vec<char>,
+    frame: StreamFrame,
+    stream_ended: bool,
     reader: &'a mut BufRead,
 }
 
@@ -17,65 +22,74 @@ impl<'a> StreamReader<'a> {
     pub fn new(input: &mut BufRead) -> StreamReader {
         StreamReader {
             chars: vec!(),
-            previous: None,
-            current: None,
-            next: None,
+            frame: StreamFrame {
+                previous: None,
+                current: None,
+                next: None,
+            },
+            stream_ended: false,
             reader: input,
         }
     }
 }
 
 impl<'a> Iterator for StreamReader<'a> {
-    type Item = char;
+    type Item = StreamFrame;
 
-    fn next(&mut self) -> Option<char> {
-        if self.chars.len() == 0 {
+    fn next(&mut self) -> Option<StreamFrame> {
+        if !self.stream_ended && self.chars.len() == 0 {
             // Buffer next line
             self.chars.clear();
 
             let mut line = String::new();
+
             if self.reader.read_line(&mut line).unwrap() == 0 {
-                return None::<char>;
-            }
-
-            println!("line: {}", line);
-
-            for c in line.chars() {
-                self.chars.push(c);
+                self.stream_ended = true;
+            } else {
+                for c in line.chars() {
+                    self.chars.push(c);
+                }
             }
         }
 
         // The first time this function is called, the next block needs to run
         // twice (otherwise it would return with only self.next set).
-        let times = match self.current.is_none() {
+        let times = match self.frame.current.is_none() {
             false => 1,
             true  => 2,
         };
 
         for _ in 0..times {
-            self.previous = self.current;
-            self.current = self.next;
-            self.next = Some(self.chars.remove(0));
+            self.frame.previous = self.frame.current;
+            self.frame.current = self.frame.next;
+            self.frame.next = match self.stream_ended {
+                false => Some(self.chars.remove(0)),
+                true  => None
+            };
         }
 
-        self.current
+        if self.frame.current.is_none() {
+            return None;
+        }
+
+        Some(StreamFrame {
+            previous: self.frame.previous,
+            current: self.frame.current,
+            next: self.frame.next,
+        })
     }
 }
 
 fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
     const IGNORED_TAGS: &'static [ &'static str ] = &[ "script", "style" ];
 
-    for it in IGNORED_TAGS {
-        println!("{}", it);
-    }
-
-    //let mut reader = BufReader::new(input);
     //let mut writer = BufWriter::new(output);
     let mut bufreader = BufReader::new(input);
-    let mut reader = StreamReader::new(&mut bufreader);
+    let reader = StreamReader::new(&mut bufreader);
     let mut buffer = String::new();
 
-    let mut in_quotes = false;
+    let mut in_double_quotes = false;
+    let mut in_single_quotes = false;
     let mut in_tag = false;
 
     let mut tag = String::new();
@@ -83,22 +97,30 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
     let mut in_ignored_tag = false;
     let mut ignored_tag = "";
 
-    for char in reader {
-        println!("{}", char);
-/*
-        if char == '"' {
-            in_quotes = !in_quotes;
-            println!("in_quotes: {}", in_quotes);
+    for frame in reader {
+        let current = frame.current.unwrap();
+
+        let previous_escaped = !frame.previous.is_none() &&
+                                frame.previous.unwrap() == '\\';
+
+        if !in_single_quotes && current == '"' && !previous_escaped {
+            in_double_quotes = !in_double_quotes;
+            println!("in_double_quotes: {}", in_double_quotes);
         }
 
-        if !in_quotes {
+        if !in_double_quotes && current == '\'' && !previous_escaped {
+            in_single_quotes = !in_single_quotes;
+            println!("in_single_quotes: {}", in_single_quotes);
+        }
+
+        if !in_double_quotes && !in_single_quotes {
             // Tag start
-            if char == '<' {
+            if current == '<' {
                 in_tag = true;
             }
 
             // Tag stop
-            if char == '>' {
+            if current == '>' {
                 in_tag = false;
 
                 if !tag.starts_with("/") {
@@ -124,25 +146,13 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
             }
         }
 
-        if in_tag && char != '<' {
-            tag.push(char);
+        if in_tag && current != '<' {
+            tag.push(current);
             println!("tag: {}", tag);
         }
 
-        buffer.push(char);*/
+        buffer.push(current);
     }
-    println!("{}", buffer);
-/*
-    loop {
-        let bytes_read = try!(reader.read_line(&mut buffer));
-
-        if bytes_read == 0 {
-            break;
-        }
-
-        try!(writer.write_all(buffer.as_bytes()));
-        buffer.clear();
-    }*/
 
     Ok(())
 }

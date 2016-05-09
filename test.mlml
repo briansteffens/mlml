@@ -1,3 +1,4 @@
 <script src="hi.js">
-	console.log("what<up>");
+	console.log("w'ha\"t<up>");
+	console.log('yo"sup<here>"<there>');
 </script>
