@@ -2,7 +2,7 @@ use std::io;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
-//use std::io::BufWriter;
+use std::io::BufWriter;
 use std::env;
 
 struct StreamFrame {
@@ -83,7 +83,7 @@ impl<'a> Iterator for StreamReader<'a> {
 fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
     const IGNORED_TAGS: &'static [ &'static str ] = &[ "script", "style" ];
 
-    //let mut writer = BufWriter::new(output);
+    let mut writer = BufWriter::new(output);
     let mut bufreader = BufReader::new(input);
     let reader = StreamReader::new(&mut bufreader);
     let mut buffer: Vec<char> = vec!();
@@ -203,13 +203,19 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
                 skip_chars -= 1;
             }
         }
-    }
 
-    let mut asdf = String::new();
-    for c in buffer {
-        asdf.push(c.clone());
+        // End of uncontinuted line, write to output
+        if current == '\n' && !line_continuation {
+            let mut output_buf = String::new();
+
+            while buffer.len() > 0 {
+                let oc = buffer.remove(0);
+                output_buf.push(oc);
+            }
+
+            try!(writer.write_all(output_buf.as_bytes()));
+        }
     }
-    println!("{}", asdf);
 
     Ok(())
 }
