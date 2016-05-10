@@ -296,9 +296,22 @@ mod tests {
     }
 
     #[test]
-    fn process_basic() {
+    fn process_whitespace() {
         process_helper(
             "<script src=\"he\" \t + \t \n \t \"llo\" />\n",
             "<script src=\"hello\" />\n");
+    }
+
+    #[test]
+    fn process_no_whitespace() {
+        process_helper(
+            "<script src=\"he\"+\n\"llo\" />\n",
+            "<script src=\"hello\" />\n");
+    }
+
+    #[test]
+    fn process_ignored_tags_are_skipped() {
+        let input = "<script><link href=\"sk\"+\n\"ip\" /></script>\n";
+        process_helper(input, input);
     }
 }
