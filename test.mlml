@@ -1,7 +1,0 @@
-<script src="ABC" +
-			"DEF" />
-<script src="hi.js">
-	console.log("w'ha\"t<up>");
-	console.log('yo"sup<here>"<there="yo">');
-	<hi there="asdf" />
-</script>
