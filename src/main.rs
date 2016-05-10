@@ -5,12 +5,16 @@ use std::io::BufReader;
 use std::io::BufWriter;
 use std::env;
 
+// Represents one character read from a StreamReader, including the previous
+// and next characters if they exist.
 struct StreamFrame {
     previous: Option<char>,
     current: Option<char>,
     next: Option<char>,
 }
 
+// Reads a stream char-by-char with the ability to peek at the next and
+// previous characters in the stream.
 struct StreamReader<'a> {
     chars: Vec<char>,
     frame: StreamFrame,
@@ -53,12 +57,17 @@ impl<'a> Iterator for StreamReader<'a> {
         }
 
         // The first time this function is called, the next block needs to run
-        // twice (otherwise it would return with only self.next set).
+        // twice (otherwise it would return with only self.next set). Since it
+        // provides the next character in the stream, we have to read from the
+        // input one character in advance of the character we return. So on
+        // first run, "prime the pump" with an extra read.
         let times = match self.frame.current.is_none() {
             false => 1,
             true  => 2,
         };
 
+        // Shuffle the next character from input stream -> next -> current ->
+        // previous.
         for _ in 0..times {
             self.frame.previous = self.frame.current;
             self.frame.current = self.frame.next;
@@ -68,10 +77,12 @@ impl<'a> Iterator for StreamReader<'a> {
             };
         }
 
+        // Detect end of stream.
         if self.frame.current.is_none() {
             return None;
         }
 
+        // Return a copy of the current frame.
         Some(StreamFrame {
             previous: self.frame.previous,
             current: self.frame.current,
@@ -112,6 +123,7 @@ fn has_line_continuation(buffer: &mut Vec<char>) -> bool {
 }
 
 fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
+    // Tags whose content should be ignored for multi-line pattern matching
     const IGNORED_TAGS: &'static [ &'static str ] = &[ "script", "style" ];
 
     let mut writer = BufWriter::new(output);
@@ -192,21 +204,18 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
 
         if in_tag && !in_ignored_tag && !in_double_quotes &&
                 !in_single_quotes && current == '\n' {
-
             if has_line_continuation(&mut buffer) {
                 line_continuation = true;
             }
         }
 
         // Skip characters if we are currently processing a line continuation.
-        if !line_continuation {
-            if skip_chars == 0 {
-                buffer.push(current);
-            }
+        if !line_continuation && skip_chars == 0 {
+            buffer.push(current);
+        }
 
-            if skip_chars > 0 {
-                skip_chars -= 1;
-            }
+        if skip_chars > 0 {
+            skip_chars -= 1;
         }
 
         // End of uncontinued line, write to output
