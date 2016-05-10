@@ -153,6 +153,7 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
         let previous_escaped = !frame.previous.is_none() &&
                                 frame.previous.unwrap() == '\\';
 
+        // Toggle double-quotes
         if !in_single_quotes && current == '"' && !previous_escaped {
             in_double_quotes = !in_double_quotes;
 
@@ -163,6 +164,7 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
             }
         }
 
+        // Toggle single-quotes
         if !in_double_quotes && current == '\'' && !previous_escaped {
             in_single_quotes = !in_single_quotes;
         }
@@ -202,6 +204,7 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
             tag.push(current);
         }
 
+        // Check for line continuation at end of line
         if in_tag && !in_ignored_tag && !in_double_quotes &&
                 !in_single_quotes && current == '\n' {
             if has_line_continuation(&mut buffer) {
