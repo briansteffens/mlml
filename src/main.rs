@@ -262,3 +262,19 @@ fn main() {
         process(&mut io::stdin(), &mut io::stdout()).unwrap();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::make_output_filename;
+
+    #[test]
+    fn make_output_filename_append() {
+        assert_eq!("file.html", make_output_filename(&String::from("file")));
+    }
+
+    #[test]
+    fn make_output_filename_replace() {
+        assert_eq!("file.html",
+                make_output_filename(&String::from("file.mlml")));
+    }
+}
