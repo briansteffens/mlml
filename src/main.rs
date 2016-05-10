@@ -122,6 +122,21 @@ fn has_line_continuation(buffer: &mut Vec<char>) -> bool {
     return false;
 }
 
+// Write contents of buffer to writer and clear buffer.
+fn flush_buffer(buffer: &mut Vec<char>, writer: &mut Write)
+        -> Result<(), io::Error> {
+    let mut output_buf = String::new();
+
+    while buffer.len() > 0 {
+        let oc = buffer.remove(0);
+        output_buf.push(oc);
+    }
+
+    try!(writer.write_all(output_buf.as_bytes()));
+
+    Ok(())
+}
+
 fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
     // Tags whose content should be ignored for multi-line pattern matching
     const IGNORED_TAGS: &'static [ &'static str ] = &[ "script", "style" ];
@@ -223,15 +238,12 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
 
         // End of uncontinued line, write to output
         if current == '\n' && !line_continuation {
-            let mut output_buf = String::new();
-
-            while buffer.len() > 0 {
-                let oc = buffer.remove(0);
-                output_buf.push(oc);
-            }
-
-            try!(writer.write_all(output_buf.as_bytes()));
+            try!(flush_buffer(&mut buffer, &mut writer));
         }
+    }
+
+    if buffer.len() > 0 {
+        try!(flush_buffer(&mut buffer, &mut writer));
     }
 
     Ok(())
@@ -313,5 +325,10 @@ mod tests {
     fn process_ignored_tags_are_skipped() {
         let input = "<script><link href=\"sk\"+\n\"ip\" /></script>\n";
         process_helper(input, input);
+    }
+
+    #[test]
+    fn process_no_trailing_newline() {
+        process_helper("hello", "hello");
     }
 }
