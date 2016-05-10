@@ -80,6 +80,37 @@ impl<'a> Iterator for StreamReader<'a> {
     }
 }
 
+// A line continuation must have a double-quote, optional whitespace, a plus
+// sign, optional whitespace, and a newline. Check the end of the buffer this
+// pattern and if found, remove that pattern and return true.
+fn has_line_continuation(buffer: &mut Vec<char>) -> bool {
+    let mut found_plus = false;
+
+    for n in (0..buffer.len()).rev() {
+        if buffer[n].is_whitespace() {
+            continue;
+        }
+
+        // Line continuation character
+        if buffer[n] == '+' {
+            // Only one plus is valid
+            if found_plus {
+                return false;
+            }
+
+            found_plus = true;
+        }
+
+        // Found a line continuation, remove end of this line
+        if buffer[n] == '"' && found_plus {
+            buffer.truncate(n);
+            return true;
+        }
+    }
+
+    return false;
+}
+
 fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
     const IGNORED_TAGS: &'static [ &'static str ] = &[ "script", "style" ];
 
@@ -162,34 +193,8 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
         if in_tag && !in_ignored_tag && !in_double_quotes &&
                 !in_single_quotes && current == '\n' {
 
-            // A line continuation must have a double-quote, optional
-            // whitespace, a plus sign, optional whitespace, and a newline.
-            // Check the end of the most recent line in the buffer for this
-            // pattern.
-
-            let mut found_plus = false;
-
-            for n in (0..buffer.len()).rev() {
-                if buffer[n].is_whitespace() {
-                    continue;
-                }
-
-                // Line continuation character
-                if buffer[n] == '+' {
-                    // Only one plus is valid
-                    if found_plus {
-                        break;
-                    }
-
-                    found_plus = true;
-                }
-
-                // Found a line continuation, remove end of this line
-                if buffer[n] == '"' && found_plus {
-                    buffer.truncate(n);
-                    line_continuation = true;
-                    break;
-                }
+            if has_line_continuation(&mut buffer) {
+                line_continuation = true;
             }
         }
 
@@ -204,7 +209,7 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
             }
         }
 
-        // End of uncontinuted line, write to output
+        // End of uncontinued line, write to output
         if current == '\n' && !line_continuation {
             let mut output_buf = String::new();
 
