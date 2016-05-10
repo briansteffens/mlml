@@ -265,6 +265,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
+    // Tests for make_output_filename()
     use super::make_output_filename;
 
     #[test]
@@ -276,5 +277,28 @@ mod tests {
     fn make_output_filename_replace() {
         assert_eq!("file.html",
                 make_output_filename(&String::from("file.mlml")));
+    }
+
+    // Tests for process()
+    use super::process;
+
+    // Helper function to run process() against the input string and compare
+    // the result against the output stream.
+    fn process_helper(input: &str, expected: &str) {
+        let mut input_vec = input.as_bytes();
+        let mut output_vec: Vec<u8> = Vec::new();
+
+        process(&mut input_vec, &mut output_vec).unwrap();
+
+        let output_str = String::from_utf8(output_vec).unwrap();
+
+        assert_eq!(expected, output_str);
+    }
+
+    #[test]
+    fn process_basic() {
+        process_helper(
+            "<script src=\"he\" \t + \t \n \t \"llo\" />\n",
+            "<script src=\"hello\" />\n");
     }
 }
