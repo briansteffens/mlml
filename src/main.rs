@@ -86,7 +86,7 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
     //let mut writer = BufWriter::new(output);
     let mut bufreader = BufReader::new(input);
     let reader = StreamReader::new(&mut bufreader);
-    let mut buffer = String::new();
+    let mut buffer: Vec<char> = vec!();
 
     let mut in_double_quotes = false;
     let mut in_single_quotes = false;
@@ -97,20 +97,31 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
     let mut in_ignored_tag = false;
     let mut ignored_tag = "";
 
+    let mut line_continuation = false;
+    let mut skip_chars = 0;
+
     for frame in reader {
         let current = frame.current.unwrap();
+
+        if line_continuation && !current.is_whitespace() && current != '"' {
+            panic!("Syntax error - expected double-quote line continuation");
+        }
 
         let previous_escaped = !frame.previous.is_none() &&
                                 frame.previous.unwrap() == '\\';
 
         if !in_single_quotes && current == '"' && !previous_escaped {
             in_double_quotes = !in_double_quotes;
-            println!("in_double_quotes: {}", in_double_quotes);
+
+            // Complete line continuation
+            if line_continuation {
+                line_continuation = false;
+                skip_chars = 1;
+            }
         }
 
         if !in_double_quotes && current == '\'' && !previous_escaped {
             in_single_quotes = !in_single_quotes;
-            println!("in_single_quotes: {}", in_single_quotes);
         }
 
         if !in_double_quotes && !in_single_quotes {
@@ -129,7 +140,6 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
                         if tag.starts_with(ignored) {
                             in_ignored_tag = true;
                             ignored_tag = ignored;
-                            println!("IGNORING {}", ignored_tag);
                         }
                     }
                 } else {
@@ -138,7 +148,6 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
 
                     if tag_offset.starts_with(ignored_tag) {
                         in_ignored_tag = false;
-                        println!("NOT IGNORING");
                     }
                 }
 
@@ -148,11 +157,59 @@ fn process(input: &mut Read, output: &mut Write) -> Result<(), io::Error> {
 
         if in_tag && current != '<' {
             tag.push(current);
-            println!("tag: {}", tag);
         }
 
-        buffer.push(current);
+        if in_tag && !in_ignored_tag && !in_double_quotes &&
+                !in_single_quotes && current == '\n' {
+
+            // A line continuation must have a double-quote, optional
+            // whitespace, a plus sign, optional whitespace, and a newline.
+            // Check the end of the most recent line in the buffer for this
+            // pattern.
+
+            let mut found_plus = false;
+
+            for n in (0..buffer.len()).rev() {
+                if buffer[n].is_whitespace() {
+                    continue;
+                }
+
+                // Line continuation character
+                if buffer[n] == '+' {
+                    // Only one plus is valid
+                    if found_plus {
+                        break;
+                    }
+
+                    found_plus = true;
+                }
+
+                // Found a line continuation, remove end of this line
+                if buffer[n] == '"' && found_plus {
+                    buffer.truncate(n);
+                    line_continuation = true;
+                    break;
+                }
+            }
+        }
+
+        // Skip characters if we are currently processing a line continuation.
+        if !line_continuation {
+            if skip_chars == 0 {
+                buffer.push(current);
+            }
+
+            if skip_chars > 0 {
+                skip_chars -= 1;
+            }
+        }
     }
+
+    let mut asdf = String::new();
+    for c in buffer {
+        asdf.push(c.clone());
+    }
+    println!("{}", asdf);
 
     Ok(())
 }
